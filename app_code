@@ -1,242 +1,1037 @@
 import tkinter as tk
 from tkinter import messagebox
-import random, ipaddress
+import random
+import ipaddress
+
 
 class App:
-    BG="#0f172a"; PANEL="#1e293b"; INPUT="#263449"
-    WHITE="#f8fafc"; MUTED="#94a3b8"; BLUE="#3b82f6"
-    GREEN="#22c55e"; RED="#ef4444"; YELLOW="#f59e0b"; CYAN="#06b6d4"
+    BG = "#0f172a"
+    PANEL = "#1e293b"
+    INPUT = "#263449"
+    WHITE = "#f8fafc"
+    MUTED = "#94a3b8"
+    BLUE = "#3b82f6"
+    GREEN = "#22c55e"
+    RED = "#ef4444"
+    YELLOW = "#f59e0b"
+    CYAN = "#06b6d4"
 
     def __init__(self, root):
-        self.r=root; root.title("CCNA Subnetting Practice")
-        root.geometry("1100x800"); root.minsize(850,650); root.configure(bg=self.BG)
-        self.mode=tk.StringVar(value="Subnetting"); self.diff=tk.StringVar(value="Medium")
-        self.qnum=0; self.qcount=10; self.score=0; self.possible=0
-        self.streak=0; self.best=0; self.q=None; self.inputs=[]; self.vinputs=[]
-        self.answered=False; self.timer=None; self.time=0
-        self.build(); self.new()
+        self.root = root
+        root.title("CCNA Subnetting Practice")
+        root.geometry("1050x750")
+        root.minsize(700, 550)
+        root.configure(bg=self.BG)
 
-    def label(self,p,text,size=10,color=None,bold=False):
-        return tk.Label(p,text=text,font=("Arial",size,"bold" if bold else "normal"),
-                        fg=color or self.WHITE,bg=p["bg"])
+        self.mode = tk.StringVar(value="Subnetting")
+        self.diff = tk.StringVar(value="Medium")
+        self.questions = tk.StringVar(value="10")
+
+        self.q = None
+        self.qnum = 0
+        self.score = 0
+        self.possible = 0
+        self.streak = 0
+        self.best = 0
+        self.inputs = []
+        self.vlsm_inputs = []
+        self.answered = False
+
+        self.build()
+        self.new_question()
+
+    # ========================================================
+    # BASIC WIDGETS
+    # ========================================================
+
+    def text(self, parent, value, size=10, color=None, bold=False):
+        return tk.Label(
+            parent,
+            text=value,
+            font=("Arial", size, "bold" if bold else "normal"),
+            fg=color or self.WHITE,
+            bg=parent["bg"]
+        )
+
+    def button(self, parent, text, command, color):
+        return tk.Button(
+            parent,
+            text=text,
+            command=command,
+            bg=color,
+            fg="white",
+            activebackground=color,
+            activeforeground="white",
+            relief="flat",
+            font=("Arial", 10, "bold"),
+            padx=14,
+            pady=7
+        )
+
+    # ========================================================
+    # UI
+    # ========================================================
 
     def build(self):
-        h=tk.Frame(self.r,bg=self.BG); h.pack(fill="x",padx=25,pady=15)
-        self.label(h,"CCNA SUBNETTING PRACTICE",26,bold=True).pack(side="left")
-        self.timerlabel=self.label(h,"∞",20,self.CYAN,True); self.timerlabel.pack(side="right")
+        header = tk.Frame(self.root, bg=self.BG)
+        header.pack(fill="x", padx=20, pady=12)
 
-        s=tk.Frame(self.r,bg=self.PANEL,padx=10,pady=10); s.pack(fill="x",padx=25,pady=5)
-        self.menu(s,"Mode",self.mode,["Subnetting","VLSM","Binary"],self.restart)
-        self.menu(s,"Difficulty",self.diff,["Easy","Medium","Hard","Expert"],self.new)
-        self.menu(s,"Questions",None,["5","10","20","30","50"],self.restart)
-        self.qvar=s.winfo_children()[-1]
-        tk.Checkbutton(s,text="Timed",variable=tk.BooleanVar(),command=self.new,
-                       fg=self.WHITE,bg=self.PANEL,selectcolor="#334155").pack(side="left",padx=15)
+        self.text(
+            header,
+            "CCNA SUBNETTING PRACTICE",
+            24,
+            bold=True
+        ).pack(side="left")
 
-        st=tk.Frame(self.r,bg=self.BG); st.pack(fill="x",padx=25)
-        self.qstat=self.stat(st,"QUESTION"); self.sstat=self.stat(st,"SCORE")
-        self.tstat=self.stat(st,"STREAK"); self.astat=self.stat(st,"ACCURACY")
+        self.timer_label = self.text(
+            header,
+            "∞",
+            18,
+            self.CYAN,
+            True
+        )
+        self.timer_label.pack(side="right")
 
-        p=tk.Frame(self.r,bg=self.PANEL,padx=15,pady=12); p.pack(fill="x",padx=25,pady=8)
-        self.typ=self.label(p,"",10,self.MUTED,True); self.typ.pack()
-        self.qlabel=self.label(p,"",24,self.CYAN,True); self.qlabel.pack(pady=4)
-        self.inst=self.label(p,"",10,self.MUTED); self.inst.pack()
+        # Settings
+        settings = tk.Frame(
+            self.root,
+            bg=self.PANEL,
+            padx=8,
+            pady=8
+        )
+        settings.pack(fill="x", padx=20, pady=5)
 
-        self.area=tk.Frame(self.r,bg=self.BG); self.area.pack(fill="both",expand=True,padx=25)
+        self.menu(
+            settings,
+            "Mode",
+            self.mode,
+            ["Subnetting", "VLSM", "Binary"],
+            self.restart
+        )
 
-        b=tk.Frame(self.r,bg=self.BG); b.pack(pady=8)
-        for text,cmd,col in [("SUBMIT",self.check,self.BLUE),("HINT",self.hint,self.YELLOW),
-                             ("SOLUTION",self.solution,"#334155"),("NEXT",self.new,self.GREEN),
-                             ("END",self.end,self.RED)]:
-            tk.Button(b,text=text,command=cmd,bg=col,fg="white",relief="flat",
-                      font=("Arial",10,"bold"),padx=16,pady=7).pack(side="left",padx=3)
+        self.menu(
+            settings,
+            "Difficulty",
+            self.diff,
+            ["Easy", "Medium", "Hard", "Expert"],
+            self.new_question
+        )
 
-        self.status=self.label(self.r,"",10,self.MUTED); self.status.pack(pady=5)
+        self.menu(
+            settings,
+            "Questions",
+            self.questions,
+            ["5", "10", "20", "30", "50"],
+            self.restart
+        )
 
-    def menu(self,p,text,var,vals,cmd):
-        self.label(p,text,10,bold=True).pack(side="left",padx=(8,3))
-        if var is None:
-            var=tk.StringVar(value=vals[1] if len(vals)>1 else vals[0])
-        m=tk.OptionMenu(p,var,*vals,command=lambda _:cmd())
-        m.config(bg="#334155",fg=self.WHITE,activebackground=self.BLUE,
-                 activeforeground="white",highlightthickness=0)
-        m["menu"].config(bg="#334155",fg=self.WHITE); m.pack(side="left",padx=5)
-        if text=="Questions": self.qvar=var
+        # Stats
+        stats = tk.Frame(self.root, bg=self.BG)
+        stats.pack(fill="x", padx=20, pady=5)
 
-    def stat(self,p,title):
-        f=tk.Frame(p,bg=self.PANEL,padx=15,pady=4); f.pack(side="left",fill="x",expand=True,padx=2)
-        self.label(f,title,8,self.MUTED,True).pack()
-        x=self.label(f,"0",14,bold=True); x.pack(); return x
+        self.qstat = self.stat(stats, "QUESTION")
+        self.sstat = self.stat(stats, "SCORE")
+        self.ststat = self.stat(stats, "STREAK")
+        self.astat = self.stat(stats, "ACCURACY")
+
+        # Question panel
+        panel = tk.Frame(
+            self.root,
+            bg=self.PANEL,
+            padx=15,
+            pady=12
+        )
+        panel.pack(fill="x", padx=20, pady=6)
+
+        self.type_label = self.text(
+            panel,
+            "",
+            10,
+            self.MUTED,
+            True
+        )
+        self.type_label.pack()
+
+        self.question_label = self.text(
+            panel,
+            "",
+            22,
+            self.CYAN,
+            True
+        )
+        self.question_label.pack(pady=4)
+
+        self.instruction = self.text(
+            panel,
+            "",
+            10,
+            self.MUTED
+        )
+        self.instruction.pack()
+
+        # Answer area
+        self.answer_area = tk.Frame(
+            self.root,
+            bg=self.BG
+        )
+        self.answer_area.pack(
+            fill="both",
+            expand=True,
+            padx=20,
+            pady=5
+        )
+
+        # Buttons
+        buttons = tk.Frame(
+            self.root,
+            bg=self.BG
+        )
+        buttons.pack(pady=8)
+
+        for name, command, color in [
+            ("SUBMIT", self.check, self.BLUE),
+            ("HINT", self.hint, self.YELLOW),
+            ("SOLUTION", self.solution, "#334155"),
+            ("NEXT", self.new_question, self.GREEN),
+            ("END", self.end, self.RED)
+        ]:
+            self.button(
+                buttons,
+                name,
+                command,
+                color
+            ).pack(side="left", padx=3)
+
+        self.status = self.text(
+            self.root,
+            "",
+            10,
+            self.MUTED
+        )
+        self.status.pack(pady=3)
+
+        # Resize handler
+        self.root.bind(
+            "<Configure>",
+            self.resize
+        )
+
+    def menu(self, parent, name, variable, values, command):
+        self.text(
+            parent,
+            name,
+            9,
+            bold=True
+        ).pack(side="left", padx=(8, 3))
+
+        m = tk.OptionMenu(
+            parent,
+            variable,
+            *values,
+            command=lambda _: command()
+        )
+
+        m.config(
+            bg="#334155",
+            fg=self.WHITE,
+            activebackground=self.BLUE,
+            activeforeground="white",
+            highlightthickness=0
+        )
+
+        m["menu"].config(
+            bg="#334155",
+            fg=self.WHITE
+        )
+
+        m.pack(side="left", padx=4)
+
+    def stat(self, parent, name):
+        f = tk.Frame(
+            parent,
+            bg=self.PANEL,
+            padx=10,
+            pady=4
+        )
+
+        f.pack(
+            side="left",
+            fill="x",
+            expand=True,
+            padx=2
+        )
+
+        self.text(
+            f,
+            name,
+            8,
+            self.MUTED,
+            True
+        ).pack()
+
+        value = self.text(
+            f,
+            "0",
+            13,
+            bold=True
+        )
+        value.pack()
+
+        return value
+
+    # ========================================================
+    # RESPONSIVE SIZING
+    # ========================================================
+
+    def resize(self, event):
+        if event.widget != self.root:
+            return
+
+        width = self.root.winfo_width()
+
+        # Scale question text
+        if width < 800:
+            self.question_label.config(
+                font=("Courier New", 18, "bold")
+            )
+        elif width < 950:
+            self.question_label.config(
+                font=("Courier New", 21, "bold")
+            )
+        else:
+            self.question_label.config(
+                font=("Courier New", 24, "bold")
+            )
+
+    # ========================================================
+    # QUESTION CONTROL
+    # ========================================================
 
     def clear(self):
-        if self.timer: self.r.after_cancel(self.timer); self.timer=None
-        for w in self.area.winfo_children(): w.destroy()
-        self.inputs=[]; self.vinputs=[]; self.answered=False
+        self.inputs = []
+        self.vlsm_inputs = []
+        self.answered = False
+
+        for widget in self.answer_area.winfo_children():
+            widget.destroy()
 
     def restart(self):
-        self.qnum=self.score=self.possible=self.streak=self.best=0
-        self.new()
+        self.qnum = 0
+        self.score = 0
+        self.possible = 0
+        self.streak = 0
+        self.best = 0
+        self.new_question()
 
-    def new(self):
-        self.clear(); self.qcount=int(self.qvar.get())
-        if self.qnum>=self.qcount:
-            if self.qnum: return self.finish()
-        self.qnum+=1
-        {"Subnetting":self.subnet,"VLSM":self.vlsm,"Binary":self.binary}[self.mode.get()]()
-        self.stats(); self.start_timer()
+    def new_question(self):
+        self.clear()
 
-    # ---------------- SUBNETTING ----------------
+        count = int(self.questions.get())
 
-    def subnet(self):
-        lo={"Easy":24,"Medium":16,"Hard":8,"Expert":1}[self.diff.get()]
-        c=random.randint(lo,30); ip=ipaddress.IPv4Address(random.randint(1,0xfffffffe))
-        n=ipaddress.ip_network(f"{ip}/{c}",strict=False); x=int(str(ip).split(".")[0])
-        cls="A" if x<=126 else "B" if x<=191 else "C" if x<=223 else "D" if x<=239 else "E"
-        default={"A":8,"B":16,"C":24}.get(cls)
-        subs=2**(c-default) if default and c>=default else "N/A"
-        bigger=random.randint(c+1,30) if c<30 else 31
+        if self.qnum >= count:
+            self.finish()
+            return
 
-        self.q={"answers":[str(n.netmask),str(n.hostmask),cls,str(n.network_address),
-            str(n.network_address+1),str(n.broadcast_address-1),str(n.broadcast_address),
-            str(max(0,n.num_addresses-2)),str(subs),f"/{bigger}",str(2**(bigger-c))],"cidr":c}
+        self.qnum += 1
 
-        self.typ.config(text="STANDARD IPv4 SUBNETTING"); self.qlabel.config(text=f"{ip} /{c}")
-        self.inst.config(text="Calculate every field below.")
-        labs=["Subnet mask","Wildcard mask","Class","Network","First usable","Last usable",
-              "Broadcast","Usable hosts","Number of subnets","Larger CIDR","Subnets that fit"]
-        self.fields(labs)
+        if self.mode.get() == "Subnetting":
+            self.make_subnet()
+        elif self.mode.get() == "VLSM":
+            self.make_vlsm()
+        else:
+            self.make_binary()
 
-    # ---------------- VLSM ----------------
+        self.update_stats()
 
-    def vlsm(self):
-        sets={
-            "Easy":((24,3),[4,6,10,12,20,25]),
-            "Medium":((23,4),[6,10,12,20,25,30,50]),
-            "Hard":((22,5),[10,12,20,25,30,50,60,100]),
-            "Expert":((20,6),[20,25,30,50,60,100,120,200])
+    # ========================================================
+    # SUBNETTING
+    # ========================================================
+
+    def make_subnet(self):
+        minimum = {
+            "Easy": 24,
+            "Medium": 16,
+            "Hard": 8,
+            "Expert": 1
+        }[self.diff.get()]
+
+        cidr = random.randint(minimum, 30)
+
+        ip = ipaddress.IPv4Address(
+            random.randint(1, 0xFFFFFFFE)
+        )
+
+        network = ipaddress.ip_network(
+            f"{ip}/{cidr}",
+            strict=False
+        )
+
+        first = int(str(ip).split(".")[0])
+
+        if first <= 126:
+            address_class = "A"
+            default = 8
+        elif first <= 191:
+            address_class = "B"
+            default = 16
+        elif first <= 223:
+            address_class = "C"
+            default = 24
+        elif first <= 239:
+            address_class = "D"
+            default = None
+        else:
+            address_class = "E"
+            default = None
+
+        subnets = (
+            2 ** (cidr - default)
+            if default and cidr >= default
+            else "N/A"
+        )
+
+        bigger = (
+            random.randint(cidr + 1, 30)
+            if cidr < 30
+            else 31
+        )
+
+        self.q = {
+            "cidr": cidr,
+            "answers": [
+                str(network.netmask),
+                str(network.hostmask),
+                address_class,
+                str(network.network_address),
+                str(network.network_address + 1),
+                str(network.broadcast_address - 1),
+                str(network.broadcast_address),
+                str(network.num_addresses - 2),
+                str(subnets),
+                f"/{bigger}",
+                str(2 ** (bigger - cidr))
+            ]
         }
-        (prefix,count),choices=sets[self.diff.get()]
+
+        self.type_label.config(
+            text="STANDARD IPv4 SUBNETTING"
+        )
+
+        self.question_label.config(
+            text=f"{ip} /{cidr}"
+        )
+
+        self.instruction.config(
+            text="Calculate every field."
+        )
+
+        self.add_fields([
+            "Subnet mask",
+            "Wildcard mask",
+            "Address class",
+            "Network address",
+            "First usable IP",
+            "Last usable IP",
+            "Broadcast address",
+            "Usable hosts",
+            "Number of subnets",
+            "Larger CIDR",
+            "Subnets that fit"
+        ])
+
+    # ========================================================
+    # VLSM
+    # ========================================================
+
+    def make_vlsm(self):
+        settings = {
+            "Easy": (
+                24, 3,
+                [4, 6, 10, 12, 20, 25]
+            ),
+            "Medium": (
+                23, 4,
+                [6, 10, 12, 20, 25, 30, 50]
+            ),
+            "Hard": (
+                22, 5,
+                [10, 12, 20, 25, 30, 50, 60, 100]
+            ),
+            "Expert": (
+                20, 6,
+                [20, 25, 30, 50, 60, 100, 120, 200]
+            )
+        }
+
+        prefix, count, choices = settings[
+            self.diff.get()
+        ]
+
         while True:
-            hosts=sorted(random.sample(choices,count),reverse=True)
-            blocks=[2**((h+2-1).bit_length()) for h in hosts]
-            if sum(blocks)<=2**(32-prefix): break
+            hosts = sorted(
+                random.sample(choices, count),
+                reverse=True
+            )
 
-        base=ipaddress.ip_network(f"{random.randint(1,223)}.0.0.0/{prefix}",strict=False)
-        cur=int(base.network_address); ans=[]
-        for h,b in zip(hosts,blocks):
-            p=32-(b.bit_length()-1); n=ipaddress.ip_network((cur,p))
-            ans.append([f"/{p}",str(n.netmask),str(n.network_address),
-                        str(n.network_address+1),str(n.broadcast_address-1),str(n.broadcast_address)])
-            cur+=b
+            blocks = [
+                2 ** ((h + 2 - 1).bit_length())
+                for h in hosts
+            ]
 
-        self.q={"base":str(base),"hosts":hosts,"answers":ans}
-        self.typ.config(text="VLSM — VARIABLE LENGTH SUBNET MASKING")
-        self.qlabel.config(text=str(base))
-        self.inst.config(text=f"Host requirements: {hosts}")
+            if sum(blocks) <= 2 ** (32 - prefix):
+                break
 
-        frame=tk.Frame(self.area,bg=self.BG); frame.pack(fill="x",expand=True)
-        heads=["#","Hosts","CIDR","Mask","Network","First","Last","Broadcast"]
-        widths=[4,7,8,15,15,15,15,15]
-        for c,(h,w) in enumerate(zip(heads,widths)):
-            self.label(frame,h,8,self.CYAN,True).grid(row=0,column=c,padx=1,pady=2)
+        base = ipaddress.ip_network(
+            f"{random.randint(1, 223)}.0.0.0/{prefix}",
+            strict=False
+        )
 
-        for r,(h,a) in enumerate(zip(hosts,ans),1):
-            self.label(frame,str(r),8).grid(row=r,column=0)
-            self.label(frame,str(h),8,self.YELLOW).grid(row=r,column=1)
-            row=[]
-            for c,v in enumerate(a,2):
-                e=tk.Entry(frame,width=widths[c],bg=self.INPUT,fg=self.WHITE,
-                           insertbackground="white",relief="flat",font=("Arial",8))
-                e.grid(row=r,column=c,padx=1,pady=2,ipady=2); row.append(e)
-            self.vinputs.append(row)
+        current = int(base.network_address)
+        answers = []
 
-    # ---------------- BINARY ----------------
+        for block in blocks:
+            new_prefix = 32 - (
+                block.bit_length() - 1
+            )
 
-    def binary(self):
-        c=random.randint(1,30); m=ipaddress.IPv4Network(f"0.0.0.0/{c}").netmask
-        b=".".join(f"{int(x):08b}" for x in str(m).split("."))
-        typ=random.choice([0,1,2])
-        if typ==0: q,a=str(m),b; text=q; inst="Convert the mask to binary."
-        elif typ==1: q,a=f"/{c}",str(m); text=q; inst="Convert CIDR to dotted decimal."
-        else: q,a=b,str(m); text=q; inst="Convert binary to a subnet mask."
-        self.q={"answers":[a]}; self.typ.config(text="BINARY PRACTICE")
-        self.qlabel.config(text=text); self.inst.config(text=inst); self.fields(["Answer"])
+            network = ipaddress.ip_network(
+                (current, new_prefix)
+            )
 
-    def fields(self,labs):
-        for x in labs:
-            f=tk.Frame(self.area,bg=self.BG); f.pack(pady=2)
-            self.label(f,x,9).pack(side="left",padx=6)
-            e=tk.Entry(f,width=30,bg=self.INPUT,fg=self.WHITE,insertbackground="white",relief="flat")
-            e.pack(side="left",ipady=3); self.inputs.append(e)
+            answers.append([
+                f"/{new_prefix}",
+                str(network.netmask),
+                str(network.network_address),
+                str(network.network_address + 1),
+                str(network.broadcast_address - 1),
+                str(network.broadcast_address)
+            ])
 
-    # ---------------- CHECK ----------------
+            current += block
+
+        self.q = {
+            "base": str(base),
+            "hosts": hosts,
+            "answers": answers
+        }
+
+        self.type_label.config(
+            text="VLSM"
+        )
+
+        self.question_label.config(
+            text=str(base)
+        )
+
+        self.instruction.config(
+            text=f"Allocate subnets for: {hosts}"
+        )
+
+        self.make_vlsm_table()
+
+    def make_vlsm_table(self):
+        # Canvas gives us scrolling if the window is too narrow.
+        outer = tk.Frame(
+            self.answer_area,
+            bg=self.BG
+        )
+        outer.pack(
+            fill="both",
+            expand=True
+        )
+
+        canvas = tk.Canvas(
+            outer,
+            bg=self.BG,
+            highlightthickness=0
+        )
+        canvas.pack(
+            side="left",
+            fill="both",
+            expand=True
+        )
+
+        scrollbar = tk.Scrollbar(
+            outer,
+            orient="horizontal",
+            command=canvas.xview
+        )
+        scrollbar.pack(
+            side="bottom",
+            fill="x"
+        )
+
+        canvas.configure(
+            xscrollcommand=scrollbar.set
+        )
+
+        table = tk.Frame(
+            canvas,
+            bg=self.BG
+        )
+
+        window = canvas.create_window(
+            (0, 0),
+            window=table,
+            anchor="nw"
+        )
+
+        def update_scroll(_=None):
+            canvas.configure(
+                scrollregion=canvas.bbox("all")
+            )
+
+            # Let the table fill the screen when possible.
+            if canvas.winfo_width() > table.winfo_reqwidth():
+                canvas.itemconfig(
+                    window,
+                    width=canvas.winfo_width()
+                )
+
+        table.bind(
+            "<Configure>",
+            update_scroll
+        )
+
+        canvas.bind(
+            "<Configure>",
+            update_scroll
+        )
+
+        headers = [
+            "#", "Hosts", "CIDR", "Mask",
+            "Network", "First", "Last", "Broadcast"
+        ]
+
+        # Responsive column sizes
+        widths = [
+            4, 7, 9, 15,
+            15, 15, 15, 15
+        ]
+
+        for col, header in enumerate(headers):
+            self.text(
+                table,
+                header,
+                8,
+                self.CYAN,
+                True
+            ).grid(
+                row=0,
+                column=col,
+                padx=1,
+                pady=3,
+                sticky="ew"
+            )
+
+            table.columnconfigure(
+                col,
+                weight=1
+            )
+
+        for row, (hosts, answers) in enumerate(
+            zip(
+                self.q["hosts"],
+                self.q["answers"]
+            ),
+            1
+        ):
+            self.text(
+                table,
+                str(row),
+                8
+            ).grid(
+                row=row,
+                column=0,
+                sticky="ew"
+            )
+
+            self.text(
+                table,
+                str(hosts),
+                8,
+                self.YELLOW
+            ).grid(
+                row=row,
+                column=1,
+                sticky="ew"
+            )
+
+            entries = []
+
+            for col, answer in enumerate(
+                answers,
+                2
+            ):
+                entry = tk.Entry(
+                    table,
+                    width=widths[col],
+                    bg=self.INPUT,
+                    fg=self.WHITE,
+                    insertbackground=self.WHITE,
+                    relief="flat",
+                    font=("Arial", 8)
+                )
+
+                entry.grid(
+                    row=row,
+                    column=col,
+                    padx=1,
+                    pady=2,
+                    ipady=3,
+                    sticky="ew"
+                )
+
+                entries.append(entry)
+
+            self.vlsm_inputs.append(entries)
+
+    # ========================================================
+    # BINARY
+    # ========================================================
+
+    def make_binary(self):
+        cidr = random.randint(1, 30)
+
+        mask = ipaddress.IPv4Network(
+            f"0.0.0.0/{cidr}"
+        ).netmask
+
+        binary = ".".join(
+            f"{int(x):08b}"
+            for x in str(mask).split(".")
+        )
+
+        choice = random.randint(0, 2)
+
+        if choice == 0:
+            question = str(mask)
+            answer = binary
+            instruction = "Convert the mask to binary."
+
+        elif choice == 1:
+            question = f"/{cidr}"
+            answer = str(mask)
+            instruction = "Convert CIDR to a subnet mask."
+
+        else:
+            question = binary
+            answer = str(mask)
+            instruction = "Convert binary to a subnet mask."
+
+        self.q = {
+            "answers": [answer]
+        }
+
+        self.type_label.config(
+            text="BINARY PRACTICE"
+        )
+
+        self.question_label.config(
+            text=question
+        )
+
+        self.instruction.config(
+            text=instruction
+        )
+
+        self.add_fields(["Answer"])
+
+    # ========================================================
+    # INPUT FIELDS
+    # ========================================================
+
+    def add_fields(self, labels):
+        for label in labels:
+            row = tk.Frame(
+                self.answer_area,
+                bg=self.BG
+            )
+
+            row.pack(
+                fill="x",
+                pady=2
+            )
+
+            self.text(
+                row,
+                label,
+                9
+            ).pack(
+                side="left",
+                padx=5
+            )
+
+            entry = tk.Entry(
+                row,
+                width=30,
+                bg=self.INPUT,
+                fg=self.WHITE,
+                insertbackground=self.WHITE,
+                relief="flat"
+            )
+
+            entry.pack(
+                side="left",
+                fill="x",
+                expand=True,
+                padx=(0, 10),
+                ipady=3
+            )
+
+            self.inputs.append(entry)
+
+    # ========================================================
+    # CHECK
+    # ========================================================
 
     def check(self):
-        if self.answered:return
-        self.answered=True
-        if self.mode.get()=="VLSM":
-            got=sum(e.get().strip().upper()==a.upper() for row,aa in zip(self.vinputs,self.q["answers"]) for e,a in zip(row,aa))
-            possible=len(self.q["answers"])*6
+        if self.answered:
+            return
+
+        self.answered = True
+
+        if self.mode.get() == "VLSM":
+            correct = 0
+            possible = len(
+                self.q["answers"]
+            ) * 6
+
+            for row, answers in zip(
+                self.vlsm_inputs,
+                self.q["answers"]
+            ):
+                for entry, answer in zip(
+                    row,
+                    answers
+                ):
+                    ok = (
+                        entry.get().strip().upper()
+                        == answer.upper()
+                    )
+
+                    entry.config(
+                        bg="#14532d"
+                        if ok else "#7f1d1d"
+                    )
+
+                    correct += ok
+
         else:
-            got=sum(e.get().strip().upper()==a.upper() for e,a in zip(self.inputs,self.q["answers"]))
-            possible=len(self.inputs)
+            correct = 0
+            possible = len(self.inputs)
 
-        self.score+=got; self.possible+=possible
-        self.streak=self.streak+1 if got==possible else 0
-        self.best=max(self.best,self.streak)
-        for e,a in [(e,a) for row,aa in zip(self.vinputs,self.q.get("answers",[])) for e,a in zip(row,aa)] if self.mode.get()=="VLSM" else zip(self.inputs,self.q["answers"]):
-            e.config(bg="#14532d" if e.get().strip().upper()==a.upper() else "#7f1d1d")
-        self.stats(); self.status.config(text=f"{got}/{possible} correct")
-        if self.qnum>=self.qcount:self.r.after(300,self.finish)
+            for entry, answer in zip(
+                self.inputs,
+                self.q["answers"]
+            ):
+                ok = (
+                    entry.get().strip().upper()
+                    == answer.upper()
+                )
 
-    # ---------------- HINT / SOLUTION ----------------
+                entry.config(
+                    bg="#14532d"
+                    if ok else "#7f1d1d"
+                )
+
+                correct += ok
+
+        self.score += correct
+        self.possible += possible
+
+        if correct == possible:
+            self.streak += 1
+            self.best = max(
+                self.best,
+                self.streak
+            )
+        else:
+            self.streak = 0
+
+        self.update_stats()
+
+        self.status.config(
+            text=f"{correct}/{possible} correct"
+        )
+
+    # ========================================================
+    # HINT
+    # ========================================================
 
     def hint(self):
-        if self.mode.get()=="VLSM":
-            s="Sort hosts largest → smallest.\nAdd 2 for network/broadcast.\nRound up to a power of 2."
-        elif self.mode.get()=="Binary":
-            s="A /N mask has N ones followed by 32-N zeros."
+        if self.mode.get() == "VLSM":
+            message = (
+                "VLSM method:\n\n"
+                "1. Sort requirements largest → smallest.\n"
+                "2. Add 2 for network/broadcast.\n"
+                "3. Round up to the next power of 2.\n"
+                "4. Allocate the largest block first."
+            )
+
+        elif self.mode.get() == "Binary":
+            message = (
+                "A /N mask has N network bits "
+                "followed by host bits."
+            )
+
         else:
-            s=f"/{self.q['cidr']} means {32-self.q['cidr']} host bits.\nUsable hosts = 2^host bits - 2."
-        messagebox.showinfo("Hint",s)
+            message = (
+                f"/{self.q['cidr']} leaves "
+                f"{32 - self.q['cidr']} host bits.\n\n"
+                "Usable hosts = 2^host bits - 2."
+            )
+
+        messagebox.showinfo(
+            "Hint",
+            message
+        )
+
+    # ========================================================
+    # SOLUTION
+    # ========================================================
 
     def solution(self):
-        if self.mode.get()=="VLSM":
-            t=f"BASE: {self.q['base']}\n\n"
-            for i,(h,a) in enumerate(zip(self.q["hosts"],self.q["answers"]),1):
-                t+=f"Subnet {i} ({h} hosts)\nCIDR: {a[0]}\nMask: {a[1]}\nNetwork: {a[2]}\nFirst: {a[3]}\nLast: {a[4]}\nBroadcast: {a[5]}\n\n"
+        if self.mode.get() == "VLSM":
+            output = (
+                f"BASE NETWORK: {self.q['base']}\n\n"
+            )
+
+            for i, (hosts, answers) in enumerate(
+                zip(
+                    self.q["hosts"],
+                    self.q["answers"]
+                ),
+                1
+            ):
+                output += (
+                    f"SUBNET {i} — {hosts} HOSTS\n"
+                    f"CIDR:      {answers[0]}\n"
+                    f"Mask:      {answers[1]}\n"
+                    f"Network:   {answers[2]}\n"
+                    f"First:     {answers[3]}\n"
+                    f"Last:      {answers[4]}\n"
+                    f"Broadcast: {answers[5]}\n\n"
+                )
+
+        elif self.mode.get() == "Subnetting":
+            labels = [
+                "Subnet mask",
+                "Wildcard mask",
+                "Class",
+                "Network",
+                "First usable",
+                "Last usable",
+                "Broadcast",
+                "Usable hosts",
+                "Subnets",
+                "Larger CIDR",
+                "Subnets that fit"
+            ]
+
+            output = "\n".join(
+                f"{a}: {b}"
+                for a, b in zip(
+                    labels,
+                    self.q["answers"]
+                )
+            )
+
         else:
-            t="\n".join(f"{x}: {y}" for x,y in zip(
-                ["Subnet mask","Wildcard mask","Class","Network","First usable","Last usable",
-                 "Broadcast","Usable hosts","Subnets","Larger CIDR","Subnets that fit"],
-                self.q["answers"]))
-        w=tk.Toplevel(self.r); w.title("Solution"); w.geometry("600x600")
-        tbox=tk.Text(w,bg=self.PANEL,fg=self.WHITE,font=("Courier New",10))
-        tbox.pack(fill="both",expand=True,padx=10,pady=10); tbox.insert("1.0",t); tbox.config(state="disabled")
+            output = (
+                f"Answer: {self.q['answers'][0]}"
+            )
 
-    # ---------------- TIMER / STATS ----------------
+        win = tk.Toplevel(self.root)
+        win.title("Solution")
+        win.geometry("600x600")
+        win.configure(bg=self.BG)
 
-    def start_timer(self):
-        if self.timer: self.r.after_cancel(self.timer); self.timer=None
-        self.timerlabel.config(text="∞",fg=self.CYAN)
+        box = tk.Text(
+            win,
+            bg=self.PANEL,
+            fg=self.WHITE,
+            font=("Courier New", 10),
+            wrap="none"
+        )
 
-    def stats(self):
-        acc=self.score/self.possible*100 if self.possible else 0
-        self.qstat.config(text=f"{self.qnum}/{self.qcount}")
-        self.sstat.config(text=f"{self.score}/{self.possible}")
-        self.tstat.config(text=str(self.streak))
-        self.astat.config(text=f"{acc:.0f}%")
+        box.pack(
+            fill="both",
+            expand=True,
+            padx=10,
+            pady=10
+        )
+
+        box.insert(
+            "1.0",
+            output
+        )
+
+        box.config(
+            state="disabled"
+        )
+
+    # ========================================================
+    # STATS
+    # ========================================================
+
+    def update_stats(self):
+        accuracy = (
+            self.score / self.possible * 100
+            if self.possible
+            else 0
+        )
+
+        self.qstat.config(
+            text=f"{self.qnum}/{self.questions.get()}"
+        )
+
+        self.sstat.config(
+            text=f"{self.score}/{self.possible}"
+        )
+
+        self.ststat.config(
+            text=str(self.streak)
+        )
+
+        self.astat.config(
+            text=f"{accuracy:.0f}%"
+        )
+
+    # ========================================================
+    # FINISH
+    # ========================================================
 
     def end(self):
         self.finish()
 
     def finish(self):
-        acc=self.score/self.possible*100 if self.possible else 0
-        messagebox.showinfo("Quiz Complete",
-            f"Questions: {self.qnum}\nScore: {self.score}/{self.possible}\n"
-            f"Accuracy: {acc:.1f}%\nBest streak: {self.best}")
-        self.restart()
+        if not self.qnum:
+            return
 
-root=tk.Tk()
-App(root)
-root.mainloop()
+        accuracy = (
+            self.score / self.possible * 100
+            if self.possible
+            else 0
+        )
+
+        messagebox.showinfo(
+            "Quiz Complete",
+            f"Questions: {self.qnum}\n"
+            f"Score: {self.score}/{self.possible}\n"
+            f"Accuracy: {accuracy:.1f}%\n"
+            f"Best streak: {self.best}"
+        )
+
+        self.qnum = 0
+        self.score = 0
+        self.possible = 0
+        self.streak = 0
+
+        self.new_question()
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    App(root)
+    root.mainloop()
